@@ -14,7 +14,9 @@ A curated subset of files mirrored automatically from our main (private) reposit
 | `src/auth/google-oauth.ts` | The shape of the Google login + Workspace-access OAuth flow. |
 | `relay/user-relay.ts` | The relay's WebSocket message bus is end-to-end encrypted. The relay routes ciphertext between your devices but cannot read it. |
 | `relay/api/oauth-token-handler.ts` | The OAuth code-exchange handler is a stateless proxy. It attaches the OAuth client_secret (which Google requires to live server-side), exchanges the code, and returns tokens to the device. It does not persist tokens. |
-| `relay/db/schema.sql` | The current, consolidated database schema. Every table and column that exists, and by omission every one that doesn't. No columns exist for Workspace OAuth tokens, conversations, or Workspace data. |
+| `relay/api/crypto.ts` | The encrypt-at-rest primitives. AES-GCM-256 with HKDF-derived key from the server-side `PF_TOKEN_SECRET`. This is how we protect the PebbleFlow-owned service credentials that live in D1. |
+| `relay/api/openrouter-oauth.ts` | The OpenRouter OAuth-delegated provisioning flow. Shows the write path that calls `encryptAtRest(…)` before inserting into `pf_service_keys`, and the read path that decrypts on fetch. |
+| `relay/db/schema.sql` | The current, consolidated database schema. Every table and column that exists, and by omission every one that doesn't. No columns exist for Workspace OAuth tokens, conversations, or Workspace data. Credential columns carry inline `-- encrypted at rest` comments citing `relay/api/crypto.ts`. |
 | `ARCHITECTURE.md` | A narrative walk-through of the privacy and security architecture, with code references back to the files above. |
 
 ## What's NOT in this repo, and why

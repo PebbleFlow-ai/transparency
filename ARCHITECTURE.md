@@ -48,6 +48,24 @@ PebbleFlow's relay is built on Cloudflare Durable Objects. Each user gets their 
 
 ---
 
+## Pillar 4: PebbleFlow-held service credentials are encrypted at rest
+
+We do hold a small number of *PebbleFlow-owned* OpenRouter credentials in D1 — not user-owned secrets, but credentials OpenRouter minted on *our* OpenRouter account (via their OAuth provisioning flow or via direct provisioning). They exist so we can meter each user's free-tier AI usage against our own account without the user needing to bring their own key. The distinction matters: these are operational service credentials belonging to PebbleFlow, not user secrets we are "storing on your behalf."
+
+Because they are still credentials, we encrypt them at rest.
+
+**The proof, in code:** [`relay/api/crypto.ts`](relay/api/crypto.ts) implements `encryptAtRest()` and `decryptAtRest()` using AES-GCM-256 with an HKDF-derived key from the server-side secret `PF_TOKEN_SECRET`. The random 12-byte IV is encoded alongside the ciphertext as `base64url(iv).base64url(ciphertext)`; `isEncryptedAtRest()` detects that shape so the code can distinguish encrypted values from legacy plaintext during migrations.
+
+**Where encryption happens on the write path:** [`relay/api/openrouter-oauth.ts`](relay/api/openrouter-oauth.ts) is the only public write path into `pf_service_keys`. Every write calls `encryptAtRest(key, env.PF_TOKEN_SECRET)` *before* the database insert. The companion read path at the same file decrypts only after confirming the stored value matches the encrypted shape.
+
+**Where the claim is annotated in the schema:** [`relay/db/schema.sql`](relay/db/schema.sql) carries inline `-- encrypted at rest with PF_TOKEN_SECRET; see relay/api/crypto.ts` comments on every credential column in `pf_service_keys`, `user_provisioned_keys`, and `provisioned_keys`, so a reader following the schema alone can chase the citation back to the primitive.
+
+**What this rules out:** a PebbleFlow employee with D1 console access, or an attacker who gains D1 read access, cannot recover the OpenRouter credentials without *also* compromising the Worker-side `PF_TOKEN_SECRET`. The secret lives only as a Cloudflare Worker secret and never enters D1, the mirror, or any code path that writes to disk.
+
+**What this does NOT claim:** encryption-at-rest is not a substitute for careful access control, and it does not protect the credential once it's decrypted at request time. It is a defense-in-depth measure against the specific failure mode of "raw database access leaks the keys."
+
+---
+
 ## What is and isn't in our central database
 
 We do operate a central database (Cloudflare D1) for the things that genuinely need to be central. Honesty matters here.
